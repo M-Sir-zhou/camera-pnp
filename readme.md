@@ -1,3 +1,11 @@
+计算物体在图像/视频中的位置与姿态。
+支持黑方块标记（black-square）和 ArUco 标记（aruco-5x5-1000）。
+支持图像和视频输入，支持相机内参与真实边长以获得更精确的位姿估计，支持保存结果。
+安装依赖
+pip install -r requirements.txt
+用法
+图像    
+
 仅显示（黑方块检测）
 python .\main.py --input .\input\images\1.jpg --target black-square
 
