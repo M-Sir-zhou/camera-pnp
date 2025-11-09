@@ -1,290 +1,352 @@
-# Camera-PnP 项目目录结构
+# 相机位姿估计系统 (Camera PnP Pose Estimation)
 
-## 📁 项目概述
+基于 OpenCV PnP 算法的相机位姿估计系统，用于计算平面方形标记（黑色正方形）在相机坐标系下的 3D 姿态。
 
-本项目实现基于 PnP (Perspective-n-Point) 算法的相机姿态估计系统，支持从图片、视频或摄像头实时检测平面标记（如黑色方块）并计算其在相机坐标系下的 6 自由度位姿（位置 + 姿态）。
+## 📋 项目简介
 
----
+本项目实现了从图像、视频或实时摄像头中检测黑色正方形标记，并通过 PnP（Perspective-n-Point）算法计算其在相机坐标系下的位置和旋转姿态。
 
-## 📂 目录结构
+### 主要特性
 
-```
-camera-pnp/
-│
-├── main.py                          # 主程序入口（姿态估计核心代码）
-├── answer1.py                       # 辅助脚本或测试代码
-│
-├── calibration_results.npz          # 相机标定结果（内参矩阵 K 和畸变系数 dist）
-│
-├── readme.md                        # 项目说明文档
-├── PROBLEM_ANALYSIS.md              # 问题诊断与解决方案文档
-├── PROJECT_STRUCTURE.md             # 本文件：项目目录结构说明
-│
-├── input/                           # 输入文件目录
-│   ├── images/                      # 测试图片
-│   │   └── 1.jpg                    # 示例图片（1279x1706 分辨率）
-│   └── videos/                      # 测试视频
-│       └── 1.mp4                    # 示例视频（720x1280 分辨率）
-│
-├── output/                          # 输出结果目录
-│   ├── images/                      # 处理后的图片输出
-│   │   ├── 1_out.jpg               # 标注后的图片结果
-│   │   ├── 1_out_fixed.jpg         # 修复后的输出
-│   │   └── result.jpg              # 最终结果
-│   └── videos/                      # 处理后的视频输出
-│       ├── result.mp4              # 标注后的视频结果
-│       ├── result_300mm.mp4        # 使用不同参数的输出
-│       └── result_nodist.mp4       # 无畸变模式输出
-│
-├── scripts/                         # 脚本工具目录
-│   ├── camera_find.py              # 相机检测相关工具
-│   └── CameraCalibration/          # 相机标定模块
-│       ├── camera_calibration.py   # 相机标定主程序
-│       └── Color/                  # 标定板颜色检测（可能）
-│
-├── diagnose_problem.py              # 问题诊断脚本（深度分析 RMSE）
-├── compare_rmse.py                  # RMSE 计算方法对比脚本
-├── test_solve_pose.py               # PnP 求解方法测试脚本
-└── diagnose_video.py                # 视频处理问题诊断脚本
-```
+- ✅ **自动检测黑色正方形标记**：基于 Otsu 阈值、形态学操作和轮廓分析
+- ✅ **高精度姿态估计**：使用 ITERATIVE 和 LM 精炼的 PnP 求解器
+- ✅ **多种输入源支持**：图片、视频、实时摄像头
+- ✅ **分辨率自适应**：自动根据图像分辨率缩放相机内参
+- ✅ **可视化输出**：叠加 3D 坐标轴、角点标注、姿态信息
+- ✅ **遮挡鲁棒性**：支持部分遮挡情况下的检测
 
----
+## 🔧 系统要求
 
-## 📄 核心文件说明
+### 硬件要求
+- 摄像头（用于实时检测，可选）
+- 黑色正方形标记（推荐尺寸：100-200mm）
 
-### 1. **main.py** 🌟
-**主程序**，包含完整的姿态估计流水线：
+### 软件要求
+- Python 3.8+
+- OpenCV 4.5+
+- NumPy 1.20+
 
-#### 核心功能模块
-```python
-# 相机标定参数管理
-load_intrinsics()              # 加载相机内参
-adapt_intrinsics_to_frame()    # 分辨率自适应缩放
+## 📦 安装步骤
 
-# 图像处理与检测
-find_black_square_corners()    # 黑色方块检测（Otsu阈值）
-find_quad_corners()            # 通用四边形检测
-order_corners()                # 角点排序（TL/TR/BR/BL）
-
-# 姿态估计（PnP）
-solve_pose()                   # PnP 求解（支持多种算法）
-pose_diagnostics()             # 位姿质量评估（RMSE/深度）
-
-# 可视化
-draw_axes()                    # 绘制 3D 坐标轴
-process_frame()                # 单帧处理+可视化
-
-# 主函数
-main()                         # 支持图片/视频/摄像头输入
-```
-
-#### 支持的输入模式
-- 📷 **图片**：`.jpg`, `.png`, `.bmp`, `.tiff`
-- 🎥 **视频**：`.mp4`, `.avi`, `.mov`, `.mkv`, `.wmv`
-- 📹 **实时摄像头**：不指定 `--input` 时自动打开
-
-#### 关键修复
-✅ **已修复 SOLVEPNP_IPPE_SQUARE 失效问题**（详见 `PROBLEM_ANALYSIS.md`）
-
----
-
-### 2. **calibration_results.npz**
-相机标定结果文件（NumPy 压缩格式）
-
-**包含数据**：
-- `camera_matrix`：3×3 相机内参矩阵 K
-  ```
-  K = [[fx,  0, cx],
-       [ 0, fy, cy],
-       [ 0,  0,  1]]
-  ```
-- `dist_coeffs`：畸变系数 [k1, k2, p1, p2, k3]
-
-**标定分辨率**：1279×1706（基准分辨率）
-
----
-
-### 3. **诊断脚本**
-
-#### **diagnose_problem.py**
-深度诊断脚本，用于分析：
-- 重投影误差（RMSE）计算
-- 不同 marker-size 的效果对比
-- 相机标定质量检查
-- 畸变校正效果分析
-
-**用法**：
+### 1. 克隆项目
 ```bash
-python diagnose_problem.py
+git clone <repository-url>
+cd camera-pnp
 ```
 
-#### **compare_rmse.py**
-对比 `main.py` 和独立测试的 RMSE 计算差异，用于发现算法问题。
-
-#### **test_solve_pose.py**
-测试不同 PnP 求解方法的效果：
-- `ITERATIVE` ✅ 推荐
-- `EPNP`
-- `IPPE_SQUARE` ⚠️ 可能失效
-- `SQPNP`
-- `P3P`
-
-#### **diagnose_video.py**
-专门诊断视频处理问题，检查分辨率自适应是否正确。
-
----
-
-## 🛠️ 使用方法
-
-### 基本命令
-
-#### 1. 处理图片
+### 2. 安装依赖
 ```bash
-# 基础用法
-python main.py --input ./input/images/1.jpg --target black-square --marker-size-mm 312
+# 使用 conda（推荐）
+conda create -n camera-pnp python=3.9
+conda activate camera-pnp
+conda install opencv numpy
 
-# 保存结果
-python main.py --input ./input/images/1.jpg --target black-square --marker-size-mm 312 --save_output ./output/images/result.jpg
-
-# 设置边界容差
-python main.py --input ./input/images/1.jpg --target black-square --marker-size-mm 312 --margin-pixels 20
+# 或使用 pip
+pip install opencv-python opencv-contrib-python numpy
 ```
 
-#### 2. 处理视频
-```bash
-# 处理视频并保存
-python main.py --input ./input/videos/1.mp4 --target black-square --marker-size-mm 250 --save ./output/videos/result.mp4
+### 3. 相机标定（首次使用必须）
+在使用前，需要先标定您的相机以获得内参矩阵和畸变系数：
 
-# 使用无畸变模式（分辨率不匹配时）
-python main.py --input ./input/videos/1.mp4 --target black-square --marker-size-mm 250 --no-dist --save ./output/videos/result_nodist.mp4
-```
-
-#### 3. 实时摄像头
-```bash
-# 打开摄像头实时检测
-python main.py --target black-square --marker-size-mm 124
-
-# 按 ESC 或 Q 键退出
-```
-
----
-
-## ⚙️ 命令行参数
-
-| 参数 | 类型 | 默认值 | 说明 |
-|-----|------|--------|------|
-| `--input`, `-i` | str | None | 图片/视频路径（不指定则打开摄像头） |
-| `--marker-size-mm` | float | 124.0 | 方块实际边长（毫米）⚠️ **关键参数** |
-| `--save`, `--save_output` | str | None | 保存输出路径 |
-| `--target` | str | `black-square` | 目标类型：`auto` 或 `black-square` |
-| `--margin-pixels` | int | 20 | 边界容差（像素） |
-| `--intrinsics` | str | None | 自定义标定文件路径 |
-| `--K` | str | None | 直接指定相机矩阵 |
-| `--dist` | str | None | 直接指定畸变系数 |
-| `--no-dist` | flag | False | 忽略畸变（零畸变模式） |
-| `--adapt-k` | flag | False | 强制分辨率自适应 |
-
----
-
-## 📊 输出数据说明
-
-### 1. 终端输出
-```
-[DEBUG] Detected corners: [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
-相机坐标下的位姿:
-tvec (mm): [X, Y, Z]        # 平移向量（位置）
-rvec: [rx, ry, rz]          # 旋转向量（姿态）
-```
-
-### 2. 可视化输出（图片/视频）
-- 🔵 **蓝点 + TL/TR/BR/BL**：四个角点
-- 🟡 **黄点 + C**：几何中心
-- 🟣 **紫点 + O**：坐标系原点
-- 🟢 **绿线 + X**：X 轴（方块平面，向右）
-- 🔴 **红线 + Y**：Y 轴（方块平面，向下）
-- 🔵 **蓝线 + Z**：Z 轴（垂直方块，向外）
-- 📝 **文本信息**：tvec, 深度, 欧拉角, RMSE
-
----
-
-## 🔧 相机标定
-
-### 使用内置标定工具
 ```bash
 python scripts/CameraCalibration/camera_calibration.py
 ```
 
-### 标定步骤
-1. 准备棋盘格标定板（推荐 9×6 内角点）
-2. 在不同角度和距离拍摄 15-20 张标定图
-3. 运行标定脚本生成 `calibration_results.npz`
-4. 确保标定图分辨率与使用时一致
+标定结果将保存为 `calibration_results.npz`。
+
+> **注意**：标定时使用的分辨率应与实际使用时的图像分辨率一致。本项目当前标定分辨率为 **640×480**。
+
+## 🚀 快速开始
+
+### 基本用法
+
+#### 1. 处理单张图片
+```bash
+python main.py --input ./input/images/img.png
+```
+
+#### 2. 处理视频文件
+```bash
+python main.py --input ./input/videos/video.mp4
+```
+
+#### 3. 实时摄像头检测
+```bash
+python main.py
+```
+
+### 高级参数
+
+```bash
+python main.py \
+  --input ./input/images/img.png \
+  --marker-size-mm 127 \
+  --save ./output/result.jpg \
+  --target black-square \
+  --margin-pixels 20
+```
+
+## 📝 命令行参数详解
+
+| 参数 | 类型 | 默认值 | 说明 |
+|-----|------|--------|------|
+| `--input`, `-i` | str | None | 输入图片/视频路径；不提供则使用摄像头 |
+| `--marker-size-mm` | float | 127.0 | 黑色正方形的实际边长（毫米）⚠️ 必须准确 |
+| `--save` | str | None | 结果保存路径（图片或视频） |
+| `--target` | str | black-square | 目标类型：`auto` 或 `black-square` |
+| `--intrinsics` | str | None | 相机内参 npz 文件路径 |
+| `--K` | str | None | 手动指定 3×3 相机内参矩阵 |
+| `--dist` | str | None | 手动指定畸变系数（4/5/8个） |
+| `--no-dist` | flag | False | 忽略畸变系数（零畸变） |
+| `--margin-pixels` | int | 20 | 边界容差（像素），触边的检测将被过滤 |
+
+## 📐 相机标定说明
+
+### 标定流程
+
+1. **准备棋盘格标定板**（推荐 9×6 或 7×5 内角点）
+2. **拍摄多张标定图片**（15-30张，不同角度和距离）
+3. **运行标定脚本**：
+   ```bash
+   python scripts/CameraCalibration/camera_calibration.py
+   ```
+4. **检查标定结果**：
+   - 重投影误差应 < 0.5 像素
+   - 成功标定后生成 `calibration_results.npz`
+
+### 标定文件内容
+```python
+calibration_results.npz:
+  - camera_matrix: 3×3 内参矩阵 K
+  - dist_coeffs: 1×5 畸变系数
+  - resolution: (width, height) 标定时的分辨率
+```
+
+### 当前标定参数（640×480）
+```
+相机内参矩阵 K:
+  fx = 456.39
+  fy = 455.91
+  cx = 327.80
+  cy = 239.71
+
+畸变系数 dist:
+  k1 = 0.0776
+  k2 = 0.0043
+  p1 = -0.0016
+  p2 = 0.0023
+  k3 = -0.3766
+```
+
+## 📊 输出说明
+
+### 姿态输出格式
+
+程序会在控制台输出以下信息：
+```
+相机坐标下的位姿:
+tvec (mm): [-28.19  -4.69  280.15]  # 平移向量 (X, Y, Z)
+rvec: [-0.471  0.065  0.020]        # 旋转向量（罗德里格斯）
+```
+
+### 可视化元素
+
+叠加图像包含：
+- 🟢 **绿色 X 轴**：指向右侧
+- 🔴 **红色 Y 轴**：指向下方
+- 🔵 **蓝色 Z 轴**：垂直纸面向外
+- 🟡 **黄色角点**：TL（左上）、TR（右上）、BR（右下）、BL（左下）
+- 🔵 **青色 C 点**：几何中心
+- 🟣 **紫色 O 点**：坐标系原点（与 C 重合表示检测正确）
+- 📊 **文字信息**：平移向量、深度、旋转角度、重投影误差
+
+### 坐标系定义
+
+- **相机坐标系**：原点在相机光心
+  - X 轴：向右
+  - Y 轴：向下
+  - Z 轴：垂直相机指向前方
+  
+- **标记坐标系**：原点在正方形中心
+  - X 轴：指向右边缘
+  - Y 轴：指向下边缘
+  - Z 轴：垂直纸面向外
+
+## 🎯 使用示例
+
+### 示例 1：单张图片处理
+```bash
+python main.py \
+  --input ./input/images/img.png \
+  --marker-size-mm 127 \
+  --save ./output/result.jpg
+```
+
+**输出**：
+```
+[DEBUG] Black-square via Otsu eps=0.02, area=38990.5
+[DEBUG] Detected corners: [[197. 149.] [384. 148.] [389. 336.] [159. 333.]]
+相机坐标下的位姿:
+tvec (mm): [-28.19  -4.69  280.15]
+rvec: [-0.471  0.065  0.020]
+[DEBUG] Result saved to: ./output/result.jpg
+```
+
+### 示例 2：视频处理并保存
+```bash
+python main.py \
+  --input ./input/videos/demo.mp4 \
+  --save ./output/demo_output.mp4
+```
+
+### 示例 3：实时摄像头
+```bash
+python main.py --marker-size-mm 150
+```
+
+按 `ESC` 或 `Q` 键退出。
+
+## 🔍 故障排查
+
+### 1. 无法检测到标记
+**可能原因**：
+- ❌ 标记太小或太大
+- ❌ 光照不均匀
+- ❌ 标记不是纯黑色
+- ❌ 标记触碰图像边界
+
+**解决方法**：
+- ✅ 使用 100-200mm 的黑色正方形
+- ✅ 改善光照条件，避免强烈阴影
+- ✅ 确保标记在图像中完整可见（不触边）
+- ✅ 调整 `--margin-pixels` 参数
+
+### 2. 姿态估计不准确（RMSE > 20px）
+**可能原因**：
+- ❌ `--marker-size-mm` 参数不正确
+- ❌ 相机标定不准确
+- ❌ 图像分辨率与标定分辨率不匹配
+
+**解决方法**：
+- ✅ 用尺子精确测量标记边长
+- ✅ 重新标定相机
+- ✅ 使用与标定相同的分辨率（640×480）
+
+### 3. 提示 "Pose INVALID"
+**含义**：重投影误差过大或深度不合理
+
+**解决方法**：
+```bash
+# 检查控制台输出的建议 marker_size
+[HINT] 检测到方块像素尺寸 ~250px；若深度 ~500mm，建议 --marker-size-mm 135
+
+# 使用建议值重新运行
+python main.py --input ./input/images/img.png --marker-size-mm 135
+```
+
+### 4. 相机标定失败
+**可能原因**：
+- ❌ 标定图片数量不足（< 10张）
+- ❌ 棋盘格角点检测失败
+- ❌ 图片模糊或光照不佳
+
+**解决方法**：
+- ✅ 拍摄 20-30 张清晰的标定图片
+- ✅ 覆盖不同角度、距离、位置
+- ✅ 确保棋盘格在每张图中完整可见
+- ✅ 避免过曝或欠曝
+
+## 📂 项目结构
+
+```
+camera-pnp/
+├── main.py                          # 主程序
+├── calibration_results.npz          # 相机标定结果
+├── README.md                        # 项目文档（本文件）
+├── input/                           # 输入文件夹
+│   ├── images/                      # 测试图片
+│   │   ├── img (1).png
+│   │   ├── img (2).png
+│   │   ├── img (3).png
+│   │   └── img (4).png
+│   └── videos/                      # 测试视频
+├── output/                          # 输出结果
+│   ├── images/                      # 处理后的图片
+│   └── videos/                      # 处理后的视频
+└── scripts/                         # 工具脚本
+    └── CameraCalibration/
+        ├── camera_calibration.py    # 相机标定脚本
+        └── Color/                   # 标定用棋盘格图片
+```
+
+## 🔬 技术细节
+
+### 检测算法流程
+
+1. **预处理**：
+   - 灰度转换
+   - 高斯模糊去噪（5×5 核）
+   - Otsu 自适应阈值二值化
+
+2. **轮廓检测**：
+   - 形态学闭运算（7×7 核）连接断裂边缘
+   - 提取外部轮廓
+   - 按面积排序
+
+3. **筛选与验证**：
+   - 过滤触边轮廓（`margin_pixels=20`）
+   - 多层次多边形逼近（eps=0.02, 0.04, 0.08）
+   - 凸性检查
+   - 长宽比验证（ratio > 0.75 为类正方形）
+
+4. **角点排序**：
+   - TL（左上）：x+y 最小
+   - BR（右下）：x+y 最大
+   - TR（右上）：x-y 最小
+   - BL（左下）：x-y 最大
+
+### PnP 求解策略
+
+1. **初值求解**：
+   - 优先使用 `SOLVEPNP_IPPE_SQUARE`（快速但需验证）
+   - 若 RMSE > 50px，退回到 `SOLVEPNP_ITERATIVE`
+
+2. **精炼优化**：
+   - 使用 `solvePnPRefineLM` 进行 Levenberg-Marquardt 优化
+   - 降低重投影误差
+
+3. **多顺序尝试**：
+   - 若 RMSE > 20px，尝试 8 种角点循环顺序
+   - 选择 RMSE 最小的解
+
+### 姿态质量指标
+
+- **重投影 RMSE**：
+  - < 3px：优秀
+  - 3-10px：良好
+  - 10-20px：一般
+  - \> 20px：较低（需检查）
+
+- **深度合理范围**：50mm - 8000mm
+
+## 📖 参考资料
+
+- [OpenCV solvePnP 文档](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#ga549c2075fac14829ff4a58bc931c033d)
+- [相机标定原理](https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html)
+- [PnP 算法综述](https://en.wikipedia.org/wiki/Perspective-n-Point)
+
+## 📧 联系方式
+
+如有问题或建议，请通过以下方式联系：
+- 提交 Issue
+- 邮件联系项目维护者
+
+## 📄 许可证
+
+本项目采用 MIT 许可证。详见 LICENSE 文件。
 
 ---
 
-## ⚠️ 常见问题
-
-### 1. **Pose rejected: rmse > 10px**
-**原因**：
-- marker-size-mm 参数不正确
-- 相机标定参数不匹配当前分辨率
-- IPPE_SQUARE 算法失效
-
-**解决**：
-- 测量方块实际尺寸
-- 参考系统建议值调整 `--marker-size-mm`
-- 使用 `--no-dist` 测试
-
-### 2. **视频处理 RMSE 过高**
-**原因**：
-- 视频分辨率与标定分辨率差异过大
-- 畸变系数不适用
-
-**解决**：
-- 为该分辨率重新标定
-- 使用 `--no-dist` 模式
-- 或转换视频分辨率至 1279×1706
-
-### 3. **检测不到方块**
-**原因**：
-- 光照不均匀
-- 对比度不足
-- 方块触碰边界
-
-**解决**：
-- 改善光照条件
-- 调整 `--margin-pixels` 参数
-- 确保方块完全在画面内
-
----
-
-## 📚 相关文档
-
-- **[README.md](./readme.md)**：快速入门指南
-- **[PROBLEM_ANALYSIS.md](./PROBLEM_ANALYSIS.md)**：问题诊断与解决方案
-- **[本文件](./PROJECT_STRUCTURE.md)**：项目结构说明
-
----
-
-## 🎯 技术栈
-
-- **Python** 3.10+
-- **OpenCV** 4.x（cv2）
-- **NumPy**
-- **视觉算法**：PnP (Perspective-n-Point)
-- **图像处理**：Otsu 阈值、Canny 边缘检测、形态学操作
-
----
-
-## 📈 项目特点
-
-✅ **鲁棒性高**：多种检测算法备份  
-✅ **自适应**：支持不同分辨率自动调整  
-✅ **实时性好**：支持摄像头实时处理  
-✅ **易用性强**：命令行参数丰富  
-✅ **可调试**：详细的 DEBUG 输出  
-✅ **已修复**：IPPE_SQUARE 算法失效问题
-
----
-
-*最后更新：2025年10月30日*
+**最后更新**：2025年11月9日  
+**版本**：v1.0  
+**作者**：M-Sir-zhou

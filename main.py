@@ -5,20 +5,19 @@ import numpy as np
 import os
 
 # 标定基准分辨率（用于按分辨率自适应缩放内参K）。
-# 你的图片分辨率为 1279x1706，这里直接作为基准。
-CALIB_BASE_RES = (1279, 1706)  # (width, height)
+# 新标定使用的分辨率为 640x480
+CALIB_BASE_RES = (640, 480)  # (width, height)
 
 
 def load_intrinsics(intrinsics_path: str | None = None):
     """加载相机内参与畸变；支持外部 npz 路径。若未提供则尝试 cwd 下 calibration_results.npz，否则使用默认值。
     返回 (K, dist)。"""
-    # 使用已标定的正确默认参数（可被 --K/--dist 或 --intrinsics 覆盖）
+    # 使用新标定的相机参数（640x480分辨率）
     default_K = np.array(
-        [[1.26040755e+03, 0.00000000e+00, 7.84465931e+02],
-         [0.00000000e+00, 1.28538299e+03, 7.10275855e+02],
-         [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]], dtype=np.double)
-    default_dist = np.array([-1.01085772e-01, 2.56189661e-01, -1.44449535e-02,
-                             2.37333875e-04, -2.95011693e-01], dtype=np.double)
+        [[456.38928938,   0.00000000, 327.80471807],
+         [  0.00000000, 455.91173277, 239.7064269 ],
+         [  0.00000000,   0.00000000,   1.00000000]], dtype=np.double)
+    default_dist = np.array([0.07756993, 0.00433085, -0.00155046, 0.00228385, -0.37656735], dtype=np.double)
     npz_path = intrinsics_path or os.path.join(os.getcwd(), 'calibration_results.npz')
     if os.path.exists(npz_path):
         try:
@@ -724,7 +723,7 @@ def main():
     parser = argparse.ArgumentParser(description='从图片或视频计算平面方形标记在相机坐标系下的姿态')
     parser.add_argument('--input', '-i', type=str, default=None,
                         help='图片或视频路径；若不提供则尝试打开摄像头')
-    parser.add_argument('--marker-size-mm', type=float, default=124.0,
+    parser.add_argument('--marker-size-mm', type=float, default=127.0,
                         help='方形标记的实际边长（毫米）')
     parser.add_argument('--save', '--save_output', dest='save', type=str, default=None,
                         help='当输入是图片时保存叠加结果；当输入是视频时保存叠加视频（支持 mp4/avi）')
@@ -767,7 +766,7 @@ def main():
         return adapt_intrinsics_to_frame(K_in, shape)
 
     if args.input is None:
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(1)
         if not cap.isOpened():
             print('无法打开摄像头，也未提供输入文件。')
             return

@@ -48,16 +48,22 @@ cv2.destroyAllWindows()
 
 # 标定相机
 if len(obj_points) > 0:
-    ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(obj_points, img_points, gray.shape[::-1], None, None)
+    # gray.shape[::-1] 返回 (width, height)
+    image_size = gray.shape[::-1]
+    ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(obj_points, img_points, image_size, None, None)
 
     # 输出标定结果
     print("相机内参矩阵 (camera_matrix):")
     print(camera_matrix)
     print("\n畸变系数 (dist_coeffs):")
     print(dist_coeffs)
+    print(f"\n标定图像分辨率: {image_size[0]} × {image_size[1]}")
 
-    # 保存标定结果
-    np.savez('calibration_results.npz', camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
+    # 保存标定结果（包含分辨率信息）
+    np.savez('calibration_results.npz', 
+             camera_matrix=camera_matrix, 
+             dist_coeffs=dist_coeffs,
+             resolution=image_size)
     print("标定结果已保存到 'calibration_results.npz'")
 else:
     print("未检测到足够的棋盘格角点，请检查图像质量或棋盘格参数。")
