@@ -649,15 +649,58 @@ def process_frame(frame, K, dist, marker_size_mm, target_mode='auto', margin_pix
     draw_axes(frame, K, dist, rvec, tvec, axis_len=marker_size_mm * 0.5, origin_xy=origin_xy)
     cv2.circle(frame, center2d, 5, (0, 255, 255) if pose_valid else (0, 150, 255), -1)
     cv2.putText(frame, 'C', (center2d[0] + 6, center2d[1] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255) if pose_valid else (0, 150, 255), 2)
-    # 文本信息
+    
+    # 文本信息 - 添加半透明背景提高可读性
     roll, pitch, yaw = rvec_tvec_to_euler(rvec)
-    info_color = (0, 0, 0) if pose_valid else (0, 0, 200)
-    cv2.putText(frame, f'T: {tvec.ravel()[0]:.1f}, {tvec.ravel()[1]:.1f}, {tvec.ravel()[2]:.1f} mm', (20, 70),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, info_color, 2)
-    cv2.putText(frame, f'd_n: {diag["depth_along_normal_mm"]:.1f} mm  lateral: {diag["lateral_mm"]:.1f} mm  rmse: {diag["reproj_rmse_px"]:.2f}px',
-                (20, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.7, info_color, 2)
-    cv2.putText(frame, f'RzRyRx(deg): {roll:.1f}, {pitch:.1f}, {yaw:.1f}',
-                (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, info_color, 2)
+    
+    # 添加半透明黑色背景
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (10, 50), (660, 210), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+    
+    # 完整显示所有姿态参数
+    y_offset = 70
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.5
+    thickness = 1
+    
+    # tvec: 平移向量原始值
+    info_color = (0, 255, 0) if pose_valid else (0, 150, 255)
+    cv2.putText(frame, f'tvec (mm): [{tvec.ravel()[0]:7.2f}, {tvec.ravel()[1]:7.2f}, {tvec.ravel()[2]:7.2f}]',
+                (15, y_offset), font, font_scale, info_color, thickness, cv2.LINE_AA)
+    y_offset += 22
+    
+    # 距离: 计算值
+    distance = float(np.linalg.norm(tvec))
+    cv2.putText(frame, f'Distance: {distance:7.2f} mm',
+                (15, y_offset), font, font_scale, info_color, thickness, cv2.LINE_AA)
+    y_offset += 22
+    
+    # rvec: 旋转向量(罗德里格斯表示)
+    rvec_color = (100, 200, 255) if pose_valid else (0, 150, 255)
+    cv2.putText(frame, f'rvec (rod): [{rvec.ravel()[0]:6.3f}, {rvec.ravel()[1]:6.3f}, {rvec.ravel()[2]:6.3f}]',
+                (15, y_offset), font, font_scale, rvec_color, thickness, cv2.LINE_AA)
+    y_offset += 22
+    
+    # 欧拉角: Roll, Pitch, Yaw
+    euler_color = (255, 200, 100) if pose_valid else (0, 150, 255)
+    cv2.putText(frame, f'Roll:  {roll:7.2f} deg',
+                (15, y_offset), font, font_scale, euler_color, thickness, cv2.LINE_AA)
+    y_offset += 22
+    cv2.putText(frame, f'Pitch: {pitch:7.2f} deg',
+                (15, y_offset), font, font_scale, euler_color, thickness, cv2.LINE_AA)
+    y_offset += 22
+    cv2.putText(frame, f'Yaw:   {yaw:7.2f} deg',
+                (15, y_offset), font, font_scale, euler_color, thickness, cv2.LINE_AA)
+    y_offset += 22
+    
+    # RMSE: 重投影误差
+    rmse = diag["reproj_rmse_px"]
+    rmse_color = (0, 255, 0) if rmse < 10 else (0, 165, 255) if rmse < 20 else (0, 0, 255)
+    if not pose_valid:
+        rmse_color = (0, 150, 255)
+    cv2.putText(frame, f'RMSE: {rmse:5.2f} px',
+                (15, y_offset), font, font_scale, rmse_color, thickness, cv2.LINE_AA)
     # 标注四个角点（无效姿态时用红色）
     corner_color = (255, 255, 255) if pose_valid else (0, 0, 255)
     for i, p in enumerate(corners):
@@ -776,19 +819,46 @@ def main():
             print('无法从摄像头读取帧。')
             return
         K_cam = maybe_adapt(K, frame.shape)
+        
+        print('\n[摄像头模式] 实时姿态估计已启动')
+        print('按 q 或 ESC 退出')
+        print('=' * 60)
+        
+        frame_count = 0
         # 第一帧也要处理显示
         vis, rvec, tvec = process_frame(frame, K_cam, dist, args.marker_size_mm, target_mode=args.target, margin_pixels=args.margin_pixels)
+        
+        # 输出第一帧姿态
+        if rvec is not None and tvec is not None:
+            roll, pitch, yaw = rvec_tvec_to_euler(rvec)
+            distance = float(np.linalg.norm(tvec))
+            print(f'\n[帧 {frame_count}] 姿态信息:')
+            print(f'  位置: X={tvec[0,0]:7.1f}, Y={tvec[1,0]:7.1f}, Z={tvec[2,0]:7.1f} mm, 距离={distance:7.1f} mm')
+            print(f'  旋转: Roll={roll:6.1f}°, Pitch={pitch:6.1f}°, Yaw={yaw:6.1f}°')
+        
         cv2.imshow('Pose', vis)
+        
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
+            frame_count += 1
+            
             vis, rvec, tvec = process_frame(frame, K_cam, dist, args.marker_size_mm, target_mode=args.target, margin_pixels=args.margin_pixels)
+            
+            # 每10帧输出一次姿态信息
+            if rvec is not None and tvec is not None and frame_count % 10 == 0:
+                roll, pitch, yaw = rvec_tvec_to_euler(rvec)
+                distance = float(np.linalg.norm(tvec))
+                print(f'[帧 {frame_count}] 位置: X={tvec[0,0]:7.1f}, Y={tvec[1,0]:7.1f}, Z={tvec[2,0]:7.1f} mm, 距离={distance:7.1f} mm | 旋转: Roll={roll:6.1f}°, Pitch={pitch:6.1f}°, Yaw={yaw:6.1f}°')
+            
             cv2.imshow('Pose', vis)
             if cv2.waitKey(1) & 0xFF in (27, ord('q')):
                 break
+        
         cap.release()
         cv2.destroyAllWindows()
+        print(f'\n总共处理 {frame_count} 帧')
         return
 
     # 文件输入
